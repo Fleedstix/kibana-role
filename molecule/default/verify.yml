@@ -1,0 +1,43 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: check ports
+      ansible.builtin.wait_for:
+        port: "{{ item }}"
+      loop:
+        - 5601
+
+    - name: Check that the kibana.yml exists
+      stat:
+        path: /etc/kibana/kibana.yml
+      register: stat_result
+      failed_when: not stat_result.stat.exists
+
+    - name: "check web"
+      uri:
+        url: "http://localhost:5601"
+        method: GET
+        validate_certs: no
+        status_code: 200
+      register: result
+      failed_when: not result.status == 200
+
+    - name: Check if kibana is running
+      command: systemctl status kibana
+      ignore_errors: yes
+      changed_when: false
+      register: service_kibana_status
+
+    - name: Report status of kibana
+      fail:
+        msg: |
+          Service kibana is not running.
+          Output of `systemctl status kibana`:
+          {{ service_kibana_status.stdout }}
+          {{ service_kibana_status.stderr }}
+      when: service_kibana_status | failed
